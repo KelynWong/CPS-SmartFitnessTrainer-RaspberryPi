@@ -37,6 +37,12 @@ CLIENT_SECRETS_FILE = os.getenv("CLIENT_SECRETS_FILE")
 TOKEN_FILE = os.getenv("TOKEN_FILE")
 SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 
+# supabase variables
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
+
+SUPABASE_WORKOUT_TABLE = "userWorkouts"
+
 # FFmpeg command
 ffmpeg_command = [
     'ffmpeg',
@@ -171,7 +177,7 @@ def start():
         if youtube_embed_url and youtube_watch_url:
             # Output a message through the speaker
             speak_text("The video stream has started successfully.")
-            
+
             return jsonify({
                 "message": "Stream started",
                 "embed_url": youtube_embed_url,
