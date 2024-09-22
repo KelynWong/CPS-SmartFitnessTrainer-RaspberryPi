@@ -103,6 +103,45 @@ def start_stream():
     global ffmpeg_process
     ffmpeg_process = subprocess.Popen(ffmpeg_command)
 
+def insert_user_workout(username, startDT, workout):
+    # Define the Supabase insert payload
+    payload = {
+        "username": username,
+        "startDT": startDT,
+        "endDT": time.strftime("%Y-%m-%dT%H:%M:%SZ"),  # Get the current datetime
+        "workout": workout,
+        "reps": 10  # change this value based on opencv counting the reps
+    }
+
+    # Make the HTTP POST request to insert the record into Supabase
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_API_KEY,
+        "Authorization": f"Bearer {SUPABASE_API_KEY}"
+    }
+    
+    url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_WORKOUT_TABLE}"
+    
+    response = requests.post(url, json=payload, headers=headers)
+    
+    if response.status_code == 201:
+        print(f"Record inserted into {SUPABASE_WORKOUT_TABLE}: {payload}")
+    else:
+        print(f"Failed to insert record: {response.text}")
+
+def get_ngrok_url():
+    try:
+        response = requests.get("http://localhost:4040/api/tunnels")
+        data = response.json()
+        public_url = data['tunnels'][0]['public_url']
+        return public_url
+    except Exception as e:
+        print(f"Error getting ngrok URL: {e}")
+        return None
+
+
+
+
 @app.route('/start', methods=['POST'])
 def start():
     global ffmpeg_process
@@ -135,10 +174,21 @@ def start():
 @app.route('/stop', methods=['POST'])
 def stop():
     global ffmpeg_process
+    
+    # Get data from the POST request
+    data = request.get_json()
+    username = data.get("username")
+    startDT = data.get("startDT")
+    workout = data.get("workout")
+    
     if ffmpeg_process is not None:
         ffmpeg_process.send_signal(signal.SIGTERM)  # Gracefully stop FFmpeg
         ffmpeg_process = None
-        return jsonify({"message": "Stream stopped"}), 200
+        
+        # Insert the workout data into Supabase
+        insert_user_workout(username, startDT, workout)
+        
+        return jsonify({"message": "Stream stopped and workout logged"}), 200
     else:
         return jsonify({"message": "No stream is running"}), 400
 
@@ -155,15 +205,9 @@ def get_url():
     else:
         return jsonify({"message": "Unable to get ngrok URL"}), 500
 
-def get_ngrok_url():
-    try:
-        response = requests.get("http://localhost:4040/api/tunnels")
-        data = response.json()
-        public_url = data['tunnels'][0]['public_url']
-        return public_url
-    except Exception as e:
-        print(f"Error getting ngrok URL: {e}")
-        return None
+
+
+
 
 if __name__ == '__main__':
     # Start ngrok in a separate thread
