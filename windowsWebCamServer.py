@@ -137,6 +137,19 @@ def insert_user_workout(username, startDT, workout):
     else:
         print(f"Failed to insert record: {response.text}")
 
+def get_ngrok_url():
+    try:
+        response = requests.get("http://localhost:4040/api/tunnels")
+        data = response.json()
+        public_url = data['tunnels'][0]['public_url']
+        return public_url
+    except Exception as e:
+        print(f"Error getting ngrok URL: {e}")
+        return None
+
+
+
+
 @app.route('/start', methods=['POST'])
 def start():
     global ffmpeg_process
@@ -200,15 +213,9 @@ def get_url():
     else:
         return jsonify({"message": "Unable to get ngrok URL"}), 500
 
-def get_ngrok_url():
-    try:
-        response = requests.get("http://localhost:4040/api/tunnels")
-        data = response.json()
-        public_url = data['tunnels'][0]['public_url']
-        return public_url
-    except Exception as e:
-        print(f"Error getting ngrok URL: {e}")
-        return None
+
+
+
 
 if __name__ == '__main__':
     # Start ngrok in a separate thread
