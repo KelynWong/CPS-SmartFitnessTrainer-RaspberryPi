@@ -1,5 +1,5 @@
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import subprocess
 import threading
 import signal
@@ -21,6 +21,7 @@ ffmpeg_process = None
 # Load environment variables from .env file
 load_dotenv()
 
+# youtube live variables
 youtube_stream_key = os.getenv("YOUTUBE_STREAM_KEY")
 youtube_channel_id = os.getenv("YOUTUBE_CHANNEL_ID")
 
@@ -28,6 +29,12 @@ youtube_channel_id = os.getenv("YOUTUBE_CHANNEL_ID")
 CLIENT_SECRETS_FILE = os.getenv("CLIENT_SECRETS_FILE")
 TOKEN_FILE = os.getenv("TOKEN_FILE")
 SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
+
+# supabase variables
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
+
+SUPABASE_WORKOUT_TABLE = "userWorkouts"
 
 # FFmpeg command
 ffmpeg_command = [
@@ -104,6 +111,32 @@ def start_stream():
     global ffmpeg_process
     ffmpeg_process = subprocess.Popen(ffmpeg_command)
 
+def insert_user_workout(username, startDT, workout):
+    # Define the Supabase insert payload
+    payload = {
+        "username": username,
+        "startDT": startDT,
+        "endDT": time.strftime("%Y-%m-%dT%H:%M:%SZ"),  # Get the current datetime
+        "workout": workout,
+        "reps": 10  # change this value based on opencv counting the reps
+    }
+
+    # Make the HTTP POST request to insert the record into Supabase
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_API_KEY,
+        "Authorization": f"Bearer {SUPABASE_API_KEY}"
+    }
+    
+    url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_WORKOUT_TABLE}"
+    
+    response = requests.post(url, json=payload, headers=headers)
+    
+    if response.status_code == 201:
+        print(f"Record inserted into {SUPABASE_WORKOUT_TABLE}: {payload}")
+    else:
+        print(f"Failed to insert record: {response.text}")
+
 @app.route('/start', methods=['POST'])
 def start():
     global ffmpeg_process
@@ -136,10 +169,21 @@ def start():
 @app.route('/stop', methods=['POST'])
 def stop():
     global ffmpeg_process
+    
+    # Get data from the POST request
+    data = request.get_json()
+    username = data.get("username")
+    startDT = data.get("startDT")
+    workout = data.get("workout")
+    
     if ffmpeg_process is not None:
         ffmpeg_process.send_signal(signal.SIGTERM)  # Gracefully stop FFmpeg
         ffmpeg_process = None
-        return jsonify({"message": "Stream stopped"}), 200
+        
+        # Insert the workout data into Supabase
+        insert_user_workout(username, startDT, workout)
+        
+        return jsonify({"message": "Stream stopped and workout logged"}), 200
     else:
         return jsonify({"message": "No stream is running"}), 400
 
