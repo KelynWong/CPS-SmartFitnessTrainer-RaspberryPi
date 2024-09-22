@@ -4,7 +4,7 @@ import subprocess
 import threading
 import signal
 import time
-import json
+import requests
 
 # OAuth 2.0 dependencies
 from google.auth.transport.requests import Request
@@ -13,6 +13,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from dotenv import load_dotenv
+from pyngrok import ngrok 
 
 app = Flask(__name__)
 ffmpeg_process = None
@@ -142,5 +143,33 @@ def stop():
     else:
         return jsonify({"message": "No stream is running"}), 400
 
+def run_ngrok():
+    # Set up an ngrok tunnel to the Flask app
+    public_url = ngrok.connect(5000)  # Exposes port 5000
+    print(f" * ngrok tunnel available at {public_url}")
+
+@app.route('/ngrok-url', methods=['GET'])
+def get_url():
+    url = get_ngrok_url()
+    if url:
+        return jsonify({"ngrok_url": url}), 200
+    else:
+        return jsonify({"message": "Unable to get ngrok URL"}), 500
+
+def get_ngrok_url():
+    try:
+        response = requests.get("http://localhost:4040/api/tunnels")
+        data = response.json()
+        public_url = data['tunnels'][0]['public_url']
+        return public_url
+    except Exception as e:
+        print(f"Error getting ngrok URL: {e}")
+        return None
+
 if __name__ == '__main__':
+    # Start ngrok in a separate thread
+    ngrok_thread = threading.Thread(target=run_ngrok)
+    ngrok_thread.start()
+
+    # Start the Flask app
     app.run(host='0.0.0.0', port=5000)
