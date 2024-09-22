@@ -5,6 +5,7 @@ import threading
 import signal
 import time
 import requests
+import pyttsx3
 
 # OAuth 2.0 dependencies
 from google.auth.transport.requests import Request
@@ -20,6 +21,13 @@ ffmpeg_process = None
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Initialize the TTS engine
+tts_engine = pyttsx3.init()
+
+def speak_text(text):
+    tts_engine.say(text)
+    tts_engine.runAndWait()
 
 youtube_stream_key = os.getenv("YOUTUBE_STREAM_KEY")
 youtube_channel_id = os.getenv("YOUTUBE_CHANNEL_ID")
@@ -161,6 +169,9 @@ def start():
         youtube_embed_url, youtube_watch_url = get_live_video_url(youtube)
 
         if youtube_embed_url and youtube_watch_url:
+            # Output a message through the speaker
+            speak_text("The video stream has started successfully.")
+            
             return jsonify({
                 "message": "Stream started",
                 "embed_url": youtube_embed_url,
