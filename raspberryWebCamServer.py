@@ -1,5 +1,5 @@
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import subprocess
 import threading
 import signal
@@ -35,7 +35,7 @@ ffmpeg_command = [
     "-f", "v4l2",
     "-i", "/dev/video0",  # Video device
     "-f", "alsa",
-    "-i", "hw:1,0",  # Audio device
+    "-i", "hw:3,0",  # Audio device
     "-s", "1920x1080",  # Resolution
     "-r", "30",  # Frame rate
     "-vcodec", "libx264",  # Video codec
