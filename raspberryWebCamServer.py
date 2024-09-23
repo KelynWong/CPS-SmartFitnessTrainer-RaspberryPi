@@ -26,8 +26,13 @@ load_dotenv()
 tts_engine = pyttsx3.init()
 
 def speak_text(text):
-    tts_engine.say(text)
-    tts_engine.runAndWait()
+    # Run the TTS engine in a separate thread to avoid blocking the response
+    def speak():
+        tts_engine.say(text)
+        tts_engine.runAndWait()
+
+    # Start the speak function in a separate thread
+    threading.Thread(target=speak).start()
 
 youtube_stream_key = os.getenv("YOUTUBE_STREAM_KEY")
 youtube_channel_id = os.getenv("YOUTUBE_CHANNEL_ID")
