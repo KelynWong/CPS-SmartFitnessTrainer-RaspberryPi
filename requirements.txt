@@ -6,4 +6,3 @@ python-dotenv
 requests
 pyngrok
 pyttsx3
-espeak-ng
