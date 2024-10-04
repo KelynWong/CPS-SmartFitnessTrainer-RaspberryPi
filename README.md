@@ -1,6 +1,7 @@
 # CPS-SmartFitnessTrainer-RaspberryPi
 
 ## Instructions
+(Optional: Set up virtual environment - `python -m venv venv`)
 1. pip install -r requirements.txt
 2. set up google oauth and enable youtube apis (https://console.cloud.google.com)
 3. make sure ffmpeg is installed onto machine (https://ffmpeg.org/download.html)
