@@ -8,11 +8,13 @@ cap = cv2.VideoCapture(0)
 cap.set(3, 1280)  # Set width
 cap.set(4, 720)   # Set height
 detector = pm.poseDetector()
-# attempts = 0 - this for counting total number of attempted pushups
+attempts = 0  # For counting the total number of push-up attempts
 count = 0
+success_rate = 0 # For calculating the success rate in %
 direction = 0
 form = 0
 feedback = "Fix Form"
+reached_halfway = False  # To check if the user has gone below 50%
 
 # Create a full-screen window
 cv2.namedWindow('Pushup counter', cv2.WND_PROP_FULLSCREEN)
@@ -27,6 +29,9 @@ while cap.isOpened():
     lmList = detector.findPosition(img, False)
 
     if len(lmList) != 0:
+
+        if count > 0:  # Avoid division by zero
+            success_rate = (count / attempts) * 100
 
         # Calculate angles for both arms
         right_elbow = detector.findAngle(img, 11, 13, 15)
@@ -48,12 +53,18 @@ while cap.isOpened():
     
         # Check for full range of motion for the push-up
         if form == 1:
-            if per == 0:                    # Check if the arms are fully extended, top position
+
+            if per >= 50:  # Check if the arms have bent at least halfway down
+                reached_halfway = True
+
+            if per == 0:  # Check if the arms are fully extended, top position
                 if right_elbow <= 90 and right_hip > 160 and \
-                   left_elbow <= 90 and left_hip > 160:
+                left_elbow <= 90 and left_hip > 160:
                     feedback = "Up"
-                    if direction == 0:
+                    if direction == 0 and reached_halfway:
                         direction = 1
+                        attempts += 1  # Increment attempts only if halfway was reached
+                        reached_halfway = False  # Reset halfway flag
                 else:
                     feedback = "Fix Form"
 
@@ -68,10 +79,12 @@ while cap.isOpened():
                     feedback = "Fix Form"
 
         print(count)
+        print(success_rate)
 
-        # Draw the pushup count in the bottom left corner
-        cv2.rectangle(img, (0, height - 100), (150, height), (0, 255, 0), cv2.FILLED)
-        cv2.putText(img, str(count), (25, height - 25), cv2.FONT_HERSHEY_PLAIN, 5, (255, 0, 0), 5)
+        # Draw the push-up count and attempts in the bottom left corner
+        cv2.rectangle(img, (0, height - 100), (200, height), (0, 255, 0), cv2.FILLED)
+        cv2.putText(img, f'Count: {count}', (10, height - 70), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
+        cv2.putText(img, f'Attempts: {attempts}', (10, height - 35), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
 
         # Draw the feedback text in the top right corner
         cv2.rectangle(img, (width - 200, 0), (width, 40), (255, 255, 255), cv2.FILLED)
