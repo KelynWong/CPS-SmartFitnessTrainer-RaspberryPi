@@ -6,6 +6,7 @@ import signal
 import time
 import requests
 import pyttsx3
+from flask_swagger_ui import get_swaggerui_blueprint
 
 # OAuth 2.0 dependencies
 from google.auth.transport.requests import Request
@@ -227,7 +228,102 @@ def get_url():
     else:
         return jsonify({"message": "Unable to get ngrok URL"}), 500
 
+# Swagger setup
+SWAGGER_URL = '/swagger'
+API_URL = '/swagger.json'
 
+swagger_spec = {
+    "swagger": "2.0",
+    "info": {
+        "title": "YouTube Stream API",
+        "description": "API for managing YouTube live streams and Supabase workout logs.",
+        "version": "1.0.0"
+    },
+    "host": "localhost:5000",
+    "schemes": ["http"],
+    "paths": {
+        "/start": {
+            "post": {
+                "summary": "Start YouTube stream",
+                "description": "Starts a live YouTube stream and returns the stream URLs.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Stream started successfully"
+                    },
+                    "400": {
+                        "description": "Stream is already running"
+                    }
+                }
+            }
+        },
+        "/stop": {
+            "post": {
+                "summary": "Stop YouTube stream",
+                "description": "Stops the live YouTube stream and logs the workout in Supabase.",
+                "parameters": [
+                    {
+                        "name": "username",
+                        "in": "body",
+                        "description": "Username",
+                        "required": True,
+                        "schema": {"type": "string"}
+                    },
+                    {
+                        "name": "startDT",
+                        "in": "body",
+                        "description": "Start date and time of the workout",
+                        "required": True,
+                        "schema": {"type": "string"}
+                    },
+                    {
+                        "name": "workout",
+                        "in": "body",
+                        "description": "Workout type",
+                        "required": True,
+                        "schema": {"type": "string"}
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Stream stopped successfully and workout logged"
+                    },
+                    "400": {
+                        "description": "No stream is running"
+                    }
+                }
+            }
+        },
+        "/ngrok-url": {
+            "get": {
+                "summary": "Get ngrok URL",
+                "description": "Returns the ngrok public URL.",
+                "responses": {
+                    "200": {
+                        "description": "Ngrok URL fetched successfully"
+                    },
+                    "500": {
+                        "description": "Unable to get ngrok URL"
+                    }
+                }
+            }
+        }
+    }
+}
+
+# Set up Swagger UI blueprint
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,  # URL for exposing Swagger UI
+    API_URL,  # API spec path
+    config={'app_name': "YouTube Stream API"}
+)
+
+# Register Swagger blueprint
+app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+
+@app.route('/swagger.json')
+def swagger_json():
+    return jsonify(swagger_spec)
 
 
 
