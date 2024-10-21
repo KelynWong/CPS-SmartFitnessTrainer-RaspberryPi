@@ -120,14 +120,15 @@ def start_stream():
     global ffmpeg_process
     ffmpeg_process = subprocess.Popen(ffmpeg_command)
 
-def insert_user_workout(username, startDT, workout):
+def insert_user_workout(username, startDT, workout, reps, percentage):
     # Define the Supabase insert payload
     payload = {
         "username": username,
         "startDT": startDT,
         "endDT": time.strftime("%Y-%m-%dT%H:%M:%SZ"),  # Get the current datetime
         "workout": workout,
-        "reps": 10  # change this value based on opencv counting the reps
+        "reps": reps,
+        "overallAccuracy": percentage
     }
 
     # Make the HTTP POST request to insert the record into Supabase
@@ -163,15 +164,15 @@ def get_ngrok_url():
 def start():
     # Get data from the POST request
     data = request.get_json()
-    workout = data.get("workout")
+    workout = data.get("workout") # either pushups, squats or bicep curls
 
-    global pushup_process
-    if pushup_process is None:
+    global ffmpeg_process
+    if ffmpeg_process is None:
         # Start the push_up.py script in a new thread/process
-        pushup_process = subprocess.Popen(['python', 'push_up.py'])
+        ffmpeg_process = subprocess.Popen(['python', f'{workout}.py'])
 
         # Wait for the stream to initialize on YouTube
-        time.sleep(15)  
+        time.sleep(20)  
 
         # Get the authenticated YouTube service
         youtube = get_authenticated_service()
@@ -205,13 +206,34 @@ def stop():
     workout = data.get("workout")
     
     if ffmpeg_process is not None:
-        ffmpeg_process.send_signal(signal.SIGTERM)  # Gracefully stop FFmpeg
-        ffmpeg_process = None
+        # Stop the ffmpeg process gracefully
+        ffmpeg_process.send_signal(signal.SIGTERM)
+
+        # Wait for the process to fully terminate
+        ffmpeg_process.wait()  # This will block until the process terminates
+        ffmpeg_process = None  # Reset the global variable
+
+        # Wait till results.txt is written
+        time.sleep(5)  
+
+        # Read the count and success_rate from the result.txt file
+        count = 0
+        success_rate = 0.0
+        try:
+            with open('results.txt', 'r') as f:
+                lines = f.readlines()
+                for line in lines:
+                    if "Count:" in line:
+                        count = int(line.split(":")[1].strip())
+                    elif "Success Rate:" in line:
+                        success_rate = float(line.split(":")[1].strip().replace('%', ''))
+        except FileNotFoundError:
+            return jsonify({"message": "Result file not found"}), 400
         
         # Insert the workout data into Supabase
-        insert_user_workout(username, startDT, workout)
+        insert_user_workout(username, startDT, workout, count, success_rate)
         
-        return jsonify({"message": "Stream stopped and workout logged"}), 200
+        return jsonify({"message": "Stream stopped and workout logged", "count": count, "success_rate": success_rate}), 200
     else:
         return jsonify({"message": "No stream is running"}), 400
 
