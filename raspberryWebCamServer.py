@@ -76,15 +76,12 @@ def get_authenticated_service():
     # Check if token.json exists and load credentials
     if os.path.exists(TOKEN_FILE):
         credentials = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    print(credentials.valid)
+    
     # If no valid credentials or credentials are expired, perform OAuth flow
     if not credentials or not credentials.valid:
-        if credentials and credentials.expired and credentials.refresh_token:
-            credentials.refresh(Request())  # Refresh credentials if expired
-        else:
-            # Run the OAuth flow to get new credentials
-            flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRETS_FILE, SCOPES)
-            credentials = flow.run_local_server(port=8080, prompt='consent')
+        print("No valid credentials found. Starting OAuth flow...")
+        flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRETS_FILE, SCOPES)
+        credentials = flow.run_local_server(port=8080, prompt='consent')
 
         # Save credentials to file for future use
         with open(TOKEN_FILE, 'w') as token:
