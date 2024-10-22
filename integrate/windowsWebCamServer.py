@@ -277,11 +277,44 @@ swagger_spec = {
         "/start": {
             "post": {
                 "summary": "Start YouTube stream",
-                "description": "Starts a live YouTube stream and returns the stream URLs.",
-                "parameters": [],
+                "description": "Starts a live YouTube stream with the specified workout type and returns the stream URLs.",
+                "parameters": [
+                    {
+                        "name": "workout",
+                        "in": "body",
+                        "description": "Type of workout to stream (e.g., pushups, squats, bicepcurls).",
+                        "required": True,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "workout": {
+                                    "type": "string",
+                                    "enum": ["pushups", "squats", "bicepcurls"]  
+                                }
+                            }
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "Stream started successfully"
+                        "description": "Stream started successfully",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                    "type": "string",
+                                    "example": "Stream started"
+                                },
+                                "embed_url": {
+                                    "type": "string",
+                                    "example": "https://youtube.com/embed/live_stream?channel=CHANNEL_ID"
+                                },
+                                "watch_url": {
+                                    "type": "string",
+                                    "example": "https://youtube.com/watch?v=VIDEO_ID"
+                                }
+                            }
+                        }
                     },
                     "400": {
                         "description": "Stream is already running"
@@ -295,30 +328,46 @@ swagger_spec = {
                 "description": "Stops the live YouTube stream and logs the workout in Supabase.",
                 "parameters": [
                     {
-                        "name": "username",
+                        "name": "body",
                         "in": "body",
-                        "description": "Username",
+                        "description": "Workout logging details.",
                         "required": True,
-                        "schema": {"type": "string"}
-                    },
-                    {
-                        "name": "startDT",
-                        "in": "body",
-                        "description": "Start date and time of the workout",
-                        "required": True,
-                        "schema": {"type": "string"}
-                    },
-                    {
-                        "name": "workout",
-                        "in": "body",
-                        "description": "Workout type",
-                        "required": True,
-                        "schema": {"type": "string"}
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "username": {
+                                    "type": "string",
+                                    "description": "Username of the person who performed the workout"
+                                },
+                                "startDT": {
+                                    "type": "string",
+                                    "description": "Start date and time of the workout (ISO format)"
+                                },
+                                "workout": {
+                                    "type": "string",
+                                    "description": "Type of workout (e.g., pushups, squats, bicep curls)"
+                                }
+                            },
+                            "required": ["username", "startDT", "workout"]
+                        }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Stream stopped successfully and workout logged"
+                        "description": "Stream stopped successfully and workout logged",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                    "type": "string",
+                                    "example": "Stream stopped and workout logged"
+                                },
+                                "payload": {
+                                    "type": "integer",
+                                    "description": "Database insertion result"
+                                }
+                            }
+                        }
                     },
                     "400": {
                         "description": "No stream is running"
