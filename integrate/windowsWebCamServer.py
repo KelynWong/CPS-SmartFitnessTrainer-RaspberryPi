@@ -144,8 +144,10 @@ def insert_user_workout(username, startDT, workout, reps, percentage):
     
     if response.status_code == 201:
         print(f"Record inserted into {SUPABASE_WORKOUT_TABLE}: {payload}")
+        return payload
     else:
         print(f"Failed to insert record: {response.text}")
+        return 0
 
 def get_ngrok_url():
     try:
@@ -169,10 +171,13 @@ def start():
     global ffmpeg_process
     if ffmpeg_process is None:
         # Start the push_up.py script in a new thread/process
-        ffmpeg_process = subprocess.Popen(['python', f'{workout}.py'])
+        ffmpeg_process = subprocess.Popen(['python', f'{workout}.py'], 
+                        stdin=subprocess.PIPE,  # Enable stdin for the process
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE)
 
         # Wait for the stream to initialize on YouTube
-        time.sleep(20)  
+        time.sleep(30)  
 
         # Get the authenticated YouTube service
         youtube = get_authenticated_service()
@@ -207,14 +212,15 @@ def stop():
     
     if ffmpeg_process is not None:
         # Stop the ffmpeg process gracefully
-        ffmpeg_process.send_signal(signal.SIGTERM)
+        ffmpeg_process.stdin.write(b'q\n')  # Send 'q' command to the process
+        ffmpeg_process.stdin.flush()  # Ensure the command is sent
+
+        # Wait till results.txt is written
+        time.sleep(5)  
 
         # Wait for the process to fully terminate
         ffmpeg_process.wait()  # This will block until the process terminates
         ffmpeg_process = None  # Reset the global variable
-
-        # Wait till results.txt is written
-        time.sleep(5)  
 
         # Read the count and success_rate from the result.txt file
         count = 0
@@ -231,9 +237,12 @@ def stop():
             return jsonify({"message": "Result file not found"}), 400
         
         # Insert the workout data into Supabase
-        insert_user_workout(username, startDT, workout, count, success_rate)
+        result = insert_user_workout(username, startDT, workout, count, success_rate)
         
-        return jsonify({"message": "Stream stopped and workout logged", "count": count, "success_rate": success_rate}), 200
+        if result != 0:
+            return jsonify({"message": "Stream stopped and workout logged", "payload": result}), 200
+        else:
+            return jsonify({"message": "Insertion into database failed"}), 400
     else:
         return jsonify({"message": "No stream is running"}), 400
 

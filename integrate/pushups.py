@@ -1,6 +1,4 @@
-import signal
 import sys
-import time
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -8,12 +6,31 @@ import subprocess
 import PoseModule as pm
 import os
 from dotenv import load_dotenv
+import threading
+import sys
 
 load_dotenv()
 
 youtube_stream_key = os.getenv("YOUTUBE_STREAM_KEY")
-
 ffmpeg_process = None
+should_exit = False  # Initialize an exit flag
+cap = cv2.VideoCapture(0)
+
+# Function to listen for input in a separate thread
+def listen_for_commands():
+    global should_exit
+    while True:
+        command = sys.stdin.readline().strip()  # Read input from stdin
+        print(command)
+        if command == 'q':  # Check for 'q' command
+            print("Received exit command from stdin.")
+            should_exit = True
+            break
+
+# Start the command listener thread
+command_listener_thread = threading.Thread(target=listen_for_commands)
+command_listener_thread.daemon = True  # Allow thread to exit when main program does
+command_listener_thread.start()
 
 def initialize_ffmpeg():
     ffmpeg_command = [
@@ -66,22 +83,6 @@ def write_final_data(count, success_rate):
         f.write(f"Count: {count}\n")
         f.write(f"Success Rate: {success_rate:.2f}%\n")
 
-# Function to handle termination
-def signal_handler(sig, frame):
-    print("Terminating process, writing final results...")
-    if ffmpeg_process is not None:
-        ffmpeg_process.stdin.close()
-        ffmpeg_process.terminate()
-        ffmpeg_process.wait()  # Clean up FFmpeg process
-    write_final_data(count, success_rate)
-    sys.exit(0)
-
-# Register signal handler
-signal.signal(signal.SIGTERM, signal_handler)
-
-# Initialize the camera capture
-cap = cv2.VideoCapture(0)
-
 if not cap.isOpened():
     print("Error: Could not open video stream.")
     exit()
@@ -104,27 +105,28 @@ cv2.namedWindow('Pushup counter', cv2.WND_PROP_FULLSCREEN)
 cv2.setWindowProperty('Pushup counter', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
 try:
-    while cap.isOpened():
+    while cap.isOpened() and not should_exit:  # Ensure loop stops if exit flag is set
         ret, img = cap.read()
         if not ret:
             print("Failed to grab frame")
             break
 
-        height, width, _ = img.shape
+        # Check for 'q' key press to exit
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            print("Exit signal received ('q' pressed).")
+            should_exit = True  # Set exit flag to stop the loop
+            break  # Break the loop immediately when 'q' is pressed
 
+        # Proceed with pose detection and push-up counting if 'q' is not pressed
+        height, width, _ = img.shape
         img = detector.findPose(img, False)
         lmList = detector.findPosition(img, False)
 
-        # Initialize FFmpeg if the process is not running
         if ffmpeg_process is None or ffmpeg_process.poll() is not None:
             print("FFmpeg process closed or not started. Reinitializing...")
-            
-            # If ffmpeg_process is not None, close the previous process
             if ffmpeg_process is not None:
                 ffmpeg_process.stdin.close()
                 ffmpeg_process.wait()
-            
-            # Reinitialize FFmpeg
             ffmpeg_process = initialize_ffmpeg()
 
         if len(lmList) != 0:
@@ -189,14 +191,12 @@ try:
                 cv2.rectangle(img, (width - 30, 50), (width - 10, 380), (0, 255, 0), 3)  # Outline of the bar
                 cv2.rectangle(img, (width - 30, int(bar)), (width - 10, 380), (0, 255, 0), cv2.FILLED)  # Filled bar
                 cv2.putText(img, f'{int(per)}%', (width - 90, 430), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)  # Percentage
+            pass
 
-        # Ensure the frame is in RGB format before passing to FFmpeg
+        # Convert to RGB and resize for FFmpeg
         frame_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-        # Resize the frame to match FFmpeg input size (1280x720)
         frame_resized = cv2.resize(frame_rgb, (1280, 720))
 
-        # Send the raw byte data (RGB format) to FFmpeg
         try:
             ffmpeg_process.stdin.write(frame_resized.tobytes())
             ffmpeg_process.stdin.flush()
@@ -204,41 +204,29 @@ try:
             print(f"Error writing to FFmpeg: {e}")
             break
 
+        # Show the video frame in OpenCV window
         cv2.imshow('Pushup counter', img)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            write_final_data(count, success_rate)
-            break
 
 except KeyboardInterrupt:
     print("Keyboard Interrupt detected. Writing final results...")
 finally:
-    # Clean up OpenCV resources first
+    # Clean up resources
     cap.release()
     cv2.destroyAllWindows()
 
-    # Clean up FFmpeg process
     if ffmpeg_process is not None:
         try:
-            # Check if FFmpeg is still running
             if ffmpeg_process.poll() is None:
                 print("Terminating FFmpeg process...")
-                ffmpeg_process.stdin.close()  # Close FFmpeg's input
-                ffmpeg_process.terminate()    # Try to terminate FFmpeg gracefully
-                ffmpeg_process.wait(timeout=5)  # Wait for max 5 seconds
+                ffmpeg_process.stdin.close()
+                ffmpeg_process.terminate()
+                ffmpeg_process.wait(timeout=5)
 
-            # If process is still alive, force kill it
             if ffmpeg_process.poll() is None:
                 print("Killing FFmpeg process...")
                 ffmpeg_process.kill()
-
         except Exception as e:
             print(f"Error during FFmpeg process termination: {e}")
 
-    # Ensure data is written
     write_final_data(count, success_rate)
     print("Resources released, exiting.")
-
-cap.release()
-ffmpeg_process.stdin.close()
-ffmpeg_process.wait()
-cv2.destroyAllWindows()
