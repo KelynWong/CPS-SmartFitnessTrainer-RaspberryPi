@@ -1,4 +1,6 @@
+import queue
 import sys
+import time
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -8,13 +10,33 @@ import os
 from dotenv import load_dotenv
 import threading
 import sys
+import pyttsx3
 
 load_dotenv()
 
 youtube_stream_key = os.getenv("YOUTUBE_STREAM_KEY")
 ffmpeg_process = None
 should_exit = False  # Initialize an exit flag
+tts_engine = pyttsx3.init() # Initialize the TTS engine
+feedback_queue = queue.Queue()
+stop_speaking = False  # A flag to stop the speaking thread
 cap = cv2.VideoCapture(0)
+
+encouragement_messages = [
+    "Great job! Keep it up!",
+    "You're doing amazing!",
+    "Fantastic effort! Keep pushing!",
+    "You're almost there!",
+    "Excellent work! Stay strong!"
+]
+
+invalid_attempt_messages = [
+    "Almost there! Fix your form!",
+    "Not quite right! Try again!",
+    "Keep going! You're doing well!",
+    "Check your posture and try again!",
+    "You got this! Adjust your form!"
+]
 
 # Function to listen for input in a separate thread
 def listen_for_commands():
@@ -31,6 +53,27 @@ def listen_for_commands():
 command_listener_thread = threading.Thread(target=listen_for_commands)
 command_listener_thread.daemon = True  # Allow thread to exit when main program does
 command_listener_thread.start()
+
+def speak_text(text):
+    """Adds text to the speaking queue."""
+    feedback_queue.put(text)
+
+def speak():
+    """Thread function to handle speaking messages from the queue."""
+    global stop_speaking  # Ensure we access the global flag
+    while not stop_speaking:
+        if not feedback_queue.empty():
+            text = feedback_queue.get()  # Get the next message
+            tts_engine.say(text)
+            tts_engine.runAndWait()  # This will block until speaking is done
+        else:
+            # Add a small sleep to avoid busy waiting
+            time.sleep(0.1)
+
+# Start the speaking thread
+speaking_thread = threading.Thread(target=speak)
+speaking_thread.daemon = True  # Daemon thread will not prevent exit
+speaking_thread.start()
 
 def initialize_ffmpeg():
     ffmpeg_command = [
@@ -97,7 +140,9 @@ count = 0
 success_rate = 0
 direction = 0
 form = 0
-feedback = "Fix Form"
+previous_feedback = ""
+feedback = "Start Workout"
+successful_counts = 0
 reached_halfway = False
 
 # Create a full-screen window
@@ -142,7 +187,7 @@ try:
             left_shoulder = detector.findAngle(img, 14, 12, 24)
             left_hip = detector.findAngle(img, 12, 24, 26)
 
-            # Percentage and bar for the progress bar, np.interp maps the values to a range
+            # Percentage and bar for the progress bar
             per = np.interp(right_elbow, (90, 160), (0, 100))
             bar = np.interp(right_elbow, (90, 160), (380, 50))
 
@@ -164,8 +209,14 @@ try:
                             direction = 1
                             attempts += 1  # Increment attempts only if halfway was reached
                             reached_halfway = False  # Reset halfway flag
+                            # Speak encouragement every 5 successful counts
+                            if attempts % 5 == 0:
+                                encouragement = np.random.choice(encouragement_messages)
+                                speak_text(encouragement)
+
                     else:
                         feedback = "Fix Form"
+                        speak_text(np.random.choice(invalid_attempt_messages))
 
                 if per == 100:  # Check if the arms are fully bent, bottom position
                     if right_elbow > 160 and right_shoulder > 40 and right_hip > 160 and \
@@ -177,21 +228,25 @@ try:
                     else:
                         feedback = "Fix Form"
 
+            # Speak the feedback only if it's changed
+            if feedback != previous_feedback:
+                speak_text(feedback)  # Add feedback to the queue
+                previous_feedback = feedback  # Update the previous feedback
+
             # Draw the push-up count and attempts in the bottom left corner
-            cv2.rectangle(img, (0, height - 100), (200, height), (0, 255, 0), cv2.FILLED)
-            cv2.putText(img, f'Count: {count}', (10, height - 70), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
-            cv2.putText(img, f'Attempts: {attempts}', (10, height - 35), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
+            cv2.rectangle(img, (0, height - 80), (250, height), (0, 255, 0), cv2.FILLED)
+            cv2.putText(img, f'Count: {count}', (10, height - 50), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
+            cv2.putText(img, f'Attempts: {attempts}', (10, height - 15), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
 
             # Draw the feedback text in the top right corner
-            cv2.rectangle(img, (width - 200, 0), (width, 40), (255, 255, 255), cv2.FILLED)
-            cv2.putText(img, feedback, (width - 200 + 10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
+            cv2.rectangle(img, (width - 300, 0), (width, 40), (255, 255, 255), cv2.FILLED)
+            cv2.putText(img, feedback, (width - 300 + 10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
 
             # Progress bar
             if form == 1:  # Ensure progress bar is drawn only when the form is valid
                 cv2.rectangle(img, (width - 30, 50), (width - 10, 380), (0, 255, 0), 3)  # Outline of the bar
                 cv2.rectangle(img, (width - 30, int(bar)), (width - 10, 380), (0, 255, 0), cv2.FILLED)  # Filled bar
                 cv2.putText(img, f'{int(per)}%', (width - 90, 430), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)  # Percentage
-            pass
 
         # Convert to RGB and resize for FFmpeg
         frame_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -229,4 +284,20 @@ finally:
             print(f"Error during FFmpeg process termination: {e}")
 
     write_final_data(count, success_rate)
+
     print("Resources released, exiting.")
+
+    stop_speaking = True  
+    speaking_thread.join(timeout=1)  # Wait for a second for the thread to finish
+
+    if speaking_thread.is_alive():
+        print("Speaking thread did not exit in time, trying to stop TTS...")
+        tts_engine.stop()  # Try to stop TTS if it’s currently speaking
+        speaking_thread.join(timeout=1)  # Wait again after stopping TTS
+
+    if speaking_thread.is_alive():
+        print("Speaking thread still alive, forcing exit...")
+        os._exit(1)  # Force exit if it didn't terminate
+
+    
+    
