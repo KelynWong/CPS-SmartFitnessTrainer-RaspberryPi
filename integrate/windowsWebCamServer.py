@@ -51,24 +51,24 @@ SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
 
 SUPABASE_WORKOUT_TABLE = "userWorkouts"
 
-# FFmpeg command
-ffmpeg_command = [
-    'C:\\Program Files\\ffmpeg-7.0.2-essentials_build\\bin\\ffmpeg',  # change path of ffmpeg here if needed
-    '-re',  # Read input file at native frame rate
-    '-i', 'output_pushup.mp4',  # The output file from push_up.py
-    "-s", "1920x1080",
-    "-r", "30",
-    "-vcodec", "libx264",
-    "-preset", "veryfast",
-    "-g", "60",  # Set keyframe interval (for 30 fps, 2 seconds interval = 60 frames)
-    "-acodec", "aac",
-    "-ar", "44100",
-    "-b:a", "128k",
-    "-b:v", "6800k",
-    "-maxrate", "6800k",
-    "-bufsize", "7000k",
-    "-f", "flv", f"rtmp://a.rtmp.youtube.com/live2/{youtube_stream_key}"
-]
+# # FFmpeg command
+# ffmpeg_command = [
+#     'C:\\Program Files\\ffmpeg-7.0.2-essentials_build\\bin\\ffmpeg',  # change path of ffmpeg here if needed
+#     '-re',  # Read input file at native frame rate
+#     '-i', 'output_pushup.mp4',  # The output file from push_up.py
+#     "-s", "1920x1080",
+#     "-r", "30",
+#     "-vcodec", "libx264",
+#     "-preset", "veryfast",
+#     "-g", "60",  # Set keyframe interval (for 30 fps, 2 seconds interval = 60 frames)
+#     "-acodec", "aac",
+#     "-ar", "44100",
+#     "-b:a", "128k",
+#     "-b:v", "6800k",
+#     "-maxrate", "6800k",
+#     "-bufsize", "7000k",
+#     "-f", "flv", f"rtmp://a.rtmp.youtube.com/live2/{youtube_stream_key}"
+# ]
 
 def get_authenticated_service():
     credentials = None
@@ -116,9 +116,9 @@ def get_live_video_url(youtube):
         print(f"An HTTP error occurred: {e}")
         return None, None
 
-def start_stream():
-    global ffmpeg_process
-    ffmpeg_process = subprocess.Popen(ffmpeg_command)
+# def start_stream():
+#     global ffmpeg_process
+#     ffmpeg_process = subprocess.Popen(ffmpeg_command)
 
 def insert_user_workout(username, startDT, workout, reps, percentage):
     # Define the Supabase insert payload
