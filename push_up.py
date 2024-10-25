@@ -94,7 +94,7 @@ while cap.isOpened():
                         count += 1  # Only add 1 count when push-up is complete
                         direction = 0
                 elif right_hip <= 160:
-                        feedback = "Keep your body straight"
+                    feedback = "Keep your body straight"
                 else:
                     feedback = "Fix Form"
 
