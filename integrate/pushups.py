@@ -145,6 +145,12 @@ feedback = "Start Workout"
 successful_counts = 0
 reached_halfway = False
 
+# Metrics tracking
+start_time = 0  # Start time (each)
+pushup_times = []
+total_time = 0 
+symmetry = 0  # Angle difference (left and right arms)
+
 # Create a full-screen window
 cv2.namedWindow('Pushup counter', cv2.WND_PROP_FULLSCREEN)
 cv2.setWindowProperty('Pushup counter', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -175,6 +181,7 @@ try:
             ffmpeg_process = initialize_ffmpeg()
 
         if len(lmList) != 0:
+
             if count > 0:  # Avoid division by zero
                 success_rate = (count / attempts) * 100
 
@@ -187,7 +194,9 @@ try:
             left_shoulder = detector.findAngle(img, 14, 12, 24)
             left_hip = detector.findAngle(img, 12, 24, 26)
 
-            # Percentage and bar for the progress bar
+            symmetry = abs(right_elbow - left_elbow)
+
+            # Percentage and bar for the progress bar, np.interp maps the values to a range
             per = np.interp(right_elbow, (90, 160), (0, 100))
             bar = np.interp(right_elbow, (90, 160), (380, 50))
 
@@ -195,9 +204,10 @@ try:
             if right_elbow > 160 and right_shoulder > 40 and right_hip > 160 and \
             left_elbow > 160 and left_shoulder > 40 and left_hip > 160:
                 form = 1
-
+        
             # Check for full range of motion for the push-up
             if form == 1:
+
                 if per >= 50:  # Check if the arms have bent at least halfway down
                     reached_halfway = True
 
@@ -209,44 +219,61 @@ try:
                             direction = 1
                             attempts += 1  # Increment attempts only if halfway was reached
                             reached_halfway = False  # Reset halfway flag
-                            # Speak encouragement every 5 successful counts
-                            if attempts % 5 == 0:
-                                encouragement = np.random.choice(encouragement_messages)
-                                speak_text(encouragement)
+                            if attempts % 5:
+                                speak_text(np.random.choice(invalid_attempt_messages))
 
+                            if start_time:
+                                pushup_times.append(time.time() - start_time)
+                            
+                            start_time = time.time() # Timer starts when user is at the top position
+
+                    elif right_hip <= 160:
+                        feedback = "Keep your body straight"
+                        speak_text(feedback)
+                            
                     else:
                         feedback = "Fix Form"
-                        speak_text(np.random.choice(invalid_attempt_messages))
 
-                if per == 100:  # Check if the arms are fully bent, bottom position
+                if per == 100:                  # Check if the arms are fully bent, bottom position
                     if right_elbow > 160 and right_shoulder > 40 and right_hip > 160 and \
                     left_elbow > 160 and left_shoulder > 40 and left_hip > 160:
                         feedback = "Down"
                         if direction == 1:
                             count += 1  # Only add 1 count when push-up is complete
                             direction = 0
+                            if count % 5:
+                                speak_text(np.random.choice(encouragement_messages))
+                    elif right_hip <= 160:
+                        feedback = "Keep your body straight"
+                        speak_text(feedback)
                     else:
                         feedback = "Fix Form"
 
-            # Speak the feedback only if it's changed
-            if feedback != previous_feedback:
-                speak_text(feedback)  # Add feedback to the queue
-                previous_feedback = feedback  # Update the previous feedback
+            # Calculate average push-up time
+            if pushup_times:
+                avg_time_per_pushup = sum(pushup_times) / len(pushup_times)
+            else:
+                avg_time_per_pushup = 0
 
             # Draw the push-up count and attempts in the bottom left corner
-            cv2.rectangle(img, (0, height - 80), (250, height), (0, 255, 0), cv2.FILLED)
+            cv2.rectangle(img, (0, height - 80), (530, height), (255, 255, 255), cv2.FILLED)
             cv2.putText(img, f'Count: {count}', (10, height - 50), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
             cv2.putText(img, f'Attempts: {attempts}', (10, height - 15), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
 
+            # Draw additional metrics (symmetry and average time per push-up)
+            cv2.putText(img, f'Avg Time: {avg_time_per_pushup:.2f}s', (230, height - 50), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 0), 2)
+            # the range for symmetry is 0 to 180, 0 being perfect symmetry
+            cv2.putText(img, f'Symmetry: {symmetry:.2f}', (230, height - 15), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 0), 2)
+
             # Draw the feedback text in the top right corner
-            cv2.rectangle(img, (width - 300, 0), (width, 40), (255, 255, 255), cv2.FILLED)
-            cv2.putText(img, feedback, (width - 300 + 10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
+            cv2.rectangle(img, (width - 400, 0), (width, 40), (255, 255, 255), cv2.FILLED)
+            cv2.putText(img, feedback, (width - 400 + 10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
 
             # Progress bar
             if form == 1:  # Ensure progress bar is drawn only when the form is valid
                 cv2.rectangle(img, (width - 30, 50), (width - 10, 380), (0, 255, 0), 3)  # Outline of the bar
                 cv2.rectangle(img, (width - 30, int(bar)), (width - 10, 380), (0, 255, 0), cv2.FILLED)  # Filled bar
-                cv2.putText(img, f'{int(per)}%', (width - 90, 430), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)  # Percentage
+                cv2.putText(img, f'{int(per)}%', (width - 90, 430), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2) # Percentage
 
         # Convert to RGB and resize for FFmpeg
         frame_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
