@@ -48,12 +48,49 @@ while cap.isOpened():
         per = np.interp(right_knee, (85, 170), (0, 100))
         bar = np.interp(right_knee, (85, 170), (380, 50))
 
-        # Check for proper starting form (standing position)
-        if right_knee > 160 and right_hip > 160 and right_ankle > 80 and \
-           left_knee > 160 and left_hip > 160 and left_ankle > 80:
-            form = 1
-    
-        # Check for full range of motion for the push-up
+        if form == 0:
+            # Check if position is correct?
+            left_shoulder_x = lmList[11][1]
+            right_shoulder_x = lmList[12][1]
+            
+            # Get hip landmarks (left: 23, right: 24)
+            left_hip_x = lmList[23][1]
+            right_hip_x = lmList[24][1]
+            
+            # Calculate shoulder and hip widths in pixels
+            shoulder_width = abs(right_shoulder_x - left_shoulder_x)
+            hip_width = abs(right_hip_x - left_hip_x)
+            
+            # If person is side-facing, the width between shoulders/hips will be minimal
+            # We'll set a threshold based on the image width
+            width_threshold = cap.get(3) * 0.15  # 15% of frame width
+            
+            position_feedback = []
+            is_correct = True
+            
+            if shoulder_width > width_threshold:
+                position_feedback.append("Turn sideways")
+                is_correct = False
+            
+            if hip_width > width_threshold:
+                position_feedback.append("Align hips sideways")
+                is_correct = False
+                
+            # Check if person is too close or too far (using shoulder height as reference)
+            shoulder_y = (lmList[11][2] + lmList[12][2]) / 2
+            ankle_y = (lmList[27][2] + lmList[28][2]) / 2
+            body_height = abs(ankle_y - shoulder_y)
+            
+            if body_height < cap.get(4) * 0.5:  # Less than 50% of frame height
+                position_feedback.append("Step closer")
+                is_correct = False
+            elif body_height > cap.get(4) * 0.9:  # More than 90% of frame height
+                position_feedback.append("Step back")
+                is_correct = False
+                
+            feedback = " | ".join(position_feedback) if position_feedback else "Position correct"
+            if (position_feedback==None): form = 1
+
         if form == 1:
 
             if per >= 50:  # Check if the knees are bent half-way
