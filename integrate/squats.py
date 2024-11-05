@@ -121,6 +121,7 @@ previous_feedback = ""
 feedback = "Start Workout"
 successful_counts = 0
 reached_halfway = False
+is_attempting = False
 
 # Metrics tracking
 start_time = 0
@@ -158,10 +159,16 @@ try:
                 success_rate = (count / attempts) * 100
 
             # Calculate angles for knees and hips
-            right_knee = detector.findAngle(img, 24, 26, 28)  # Right knee angles
-            left_knee = detector.findAngle(img, 23, 25, 27)  # Left knee angles
-            right_hip = detector.findAngle(img, 23, 25, 29)
-            left_hip = detector.findAngle(img, 24, 26, 30)
+            right_knee = detector.findAngle(img, 24, 26, 28)  # Right knee: hip (24), knee (26), ankle (28)
+            left_knee = detector.findAngle(img, 23, 25, 27)   # Left knee: hip (23), knee (25), ankle (27)
+
+            # Calculate hip angles using shoulders as references
+            right_hip = detector.findAngle(img, 11, 24, 26)    # Right hip: right shoulder (11), right hip (24), right knee (26)
+            left_hip = detector.findAngle(img, 12, 23, 25)     # Left hip: left shoulder (12), left hip (23), left knee (25)
+
+            # Calculate shoulder angles
+            right_shoulder = detector.findAngle(img, 11, 12, 24)  # Right shoulder angle: right shoulder (11), left shoulder (12), right hip (24)
+            left_shoulder = detector.findAngle(img, 12, 11, 23)   # Left shoulder angle: left shoulder (12), right shoulder (11), left hip (23)
 
             symmetry = abs(right_knee - left_knee)
 
@@ -169,31 +176,58 @@ try:
             if right_hip > 150 and left_hip > 150:
                 form = 1
 
-            # Squat counting logic
+            # Reset the reached_halfway flag at the start of each squat attempt
             if form == 1:
-                if right_knee < 140 and left_knee < 140:  # Check if the knees are bent
-                    feedback = "Down"
-                    if direction == 0:
-                        direction = 1
-                        attempts += 1
-                        if attempts % 5:
-                            speak_text(np.random.choice(invalid_attempt_messages))
-                    start_time = time.time()  # Start timer when down
+                if right_knee < 140 and left_knee < 140:  # Check if the knees are bent (going down)
+                    feedback = "Go down more"
 
-                if right_knee > 160 and left_knee > 160:  # Check if fully extended
-                    feedback = "Up"
-                    if direction == 1:
-                        count += 1
-                        direction = 0
-                        if count % 5:
-                            speak_text(np.random.choice(encouragement_messages))
+                    if not is_attempting:  # Increment attempts once when starting to squat down
+                        attempts += 1
+                        is_attempting = True  # Mark that we're currently attempting a squat
+                        squat_start_time = time.time()  # Record the start time of the squat
+
+                    # Check if reached halfway down
+                    if right_knee < 100 and left_knee < 100:
+                        feedback = "Up"
+                        reached_halfway = True  # Mark that we've reached halfway down
+
+                elif right_knee > 160 and left_knee > 160:  # Check if fully extended (coming up)
+                    feedback = "Down"
+
+                    if reached_halfway:  # Only count the rep if we reached halfway
+                        count += 1  # Count the rep
+                        squat_end_time = time.time()  # Record the end time of the squat
+                        squat_duration = squat_end_time - squat_start_time  # Calculate the duration
+                        squat_times.append(squat_duration)  # Append the duration to the list
+                        speak_text(np.random.choice(encouragement_messages))
+                        reached_halfway = False  # Reset for the next squat
+
+                    # Resetting the attempt logic only when coming back up
+                    is_attempting = False  # Reset the attempt flag after completing the squat
+                    direction = 0  # Reset direction to prepare for the next squat
+
+                else:
+                    # If the squat was not deep enough and we're still attempting
+                    if is_attempting:
+                        feedback = "Go down more!!!"
+                    else:
+                        is_attempting = False
+                        reached_halfway = False  # Ensure we reset reached_halfway when not in valid form
+
+            # Calculate average squat time
+            if squat_times:
+                avg_time_per_squat = sum(squat_times) / len(squat_times)
+            else:
+                avg_time_per_squat = 0
 
             # Draw the squat count and attempts in the bottom left corner
             cv2.rectangle(img, (0, height - 80), (530, height), (255, 255, 255), cv2.FILLED)
             cv2.putText(img, f'Count: {count}', (10, height - 50), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 0), 2)
             cv2.putText(img, f'Attempts: {attempts}', (10, height - 15), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 0), 2)
 
-            # Draw symmetry
+            # Draw additional metrics (symmetry and average time per push-up)
+            cv2.putText(img, f'Avg Time: {avg_time_per_squat:.2f}s', (230, height - 50), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 0), 2)
+            # the range for symmetry is 0 to 180, 0 being perfect symmetry
             cv2.putText(img, f'Symmetry: {symmetry:.2f}', (230, height - 15), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 0), 2)
 
             # Draw feedback text in the top right corner
