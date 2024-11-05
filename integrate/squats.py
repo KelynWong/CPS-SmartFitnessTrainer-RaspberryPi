@@ -22,19 +22,29 @@ stop_speaking = False
 cap = cv2.VideoCapture(0)
 
 encouragement_messages = [
-    "Great job! Keep it up!",
-    "You're doing amazing!",
-    "Fantastic effort! Keep pushing!",
-    "You're almost there!",
-    "Excellent work! Stay strong!"
+    "Great squat form! Keep it up!",
+    "Nice work! Keep pushing!",
+    "You're building strength!",
+    "Excellent squat! Stay steady!",
+    "Fantastic form! Keep going!",
+    "Stay focused and keep up the great work!",
+    "Powerful squat! Stay strong!",
+    "You're getting stronger every rep!",
+    "Amazing depth! Keep it up!",
+    "Strong squat! You're making progress!"
 ]
 
 invalid_attempt_messages = [
-    "Almost there! Fix your form!",
-    "Not quite right! Try again!",
-    "Keep going! You're doing well!",
-    "Check your posture and try again!",
-    "You got this! Adjust your form!"
+    "Almost there! Focus on your form!",
+    "Keep your knees aligned! Try again!",
+    "Watch your posture and squat again!",
+    "Stay balanced! You've got this!",
+    "Nice effort! Adjust your depth!",
+    "Engage your core and try again!",
+    "Keep your back straight!",
+    "Drive through your heels next time!",
+    "Control the movement and try again!",
+    "Almost perfect! Just adjust slightly!"
 ]
 
 def listen_for_commands():
@@ -199,7 +209,8 @@ try:
                         squat_end_time = time.time()  # Record the end time of the squat
                         squat_duration = squat_end_time - squat_start_time  # Calculate the duration
                         squat_times.append(squat_duration)  # Append the duration to the list
-                        speak_text(np.random.choice(encouragement_messages))
+                        if count % 5:
+                            speak_text(np.random.choice(encouragement_messages))
                         reached_halfway = False  # Reset for the next squat
 
                     # Resetting the attempt logic only when coming back up

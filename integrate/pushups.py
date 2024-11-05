@@ -22,20 +22,32 @@ feedback_queue = queue.Queue()
 stop_speaking = False  # A flag to stop the speaking thread
 cap = cv2.VideoCapture(0)
 
+# Encouragement messages for push-ups
 encouragement_messages = [
-    "Great job! Keep it up!",
-    "You're doing amazing!",
-    "Fantastic effort! Keep pushing!",
-    "You're almost there!",
-    "Excellent work! Stay strong!"
+    "Great push! Keep going strong!",
+    "You're doing awesome—power through it!",
+    "Fantastic push-ups! Stay steady!",
+    "Keep it up; you're building strength!",
+    "Amazing form! Keep pushing!",
+    "You're unstoppable! Almost there!",
+    "Strong push! Stay focused!",
+    "Looking great—keep those reps coming!",
+    "Way to go! Keep that core tight!",
+    "Outstanding effort! You’re crushing it!"
 ]
 
+# Invalid attempt messages for push-ups
 invalid_attempt_messages = [
-    "Almost there! Fix your form!",
-    "Not quite right! Try again!",
-    "Keep going! You're doing well!",
-    "Check your posture and try again!",
-    "You got this! Adjust your form!"
+    "Almost there! Keep your back straight!",
+    "Not quite—try lowering evenly!",
+    "Focus on your posture and try again!",
+    "You got this! Tighten your core!",
+    "Almost perfect—watch your elbows!",
+    "Adjust your form for a better push!",
+    "Keep your head aligned and try again!",
+    "Nearly there! Lower with control!",
+    "Keep your body steady and try once more!",
+    "Almost right! Maintain a steady motion!"
 ]
 
 # Function to listen for input in a separate thread
@@ -233,6 +245,7 @@ try:
                             
                     else:
                         feedback = "Fix Form"
+                        speak_text(feedback)
 
                 if per == 100:                  # Check if the arms are fully bent, bottom position
                     if right_elbow > 160 and right_shoulder > 40 and right_hip > 160 and \
