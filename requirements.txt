@@ -11,3 +11,4 @@ python-dotenv
 pyngrok
 pyttsx3
 requests
+supabase
