@@ -64,9 +64,20 @@ command_listener_thread = threading.Thread(target=listen_for_commands)
 command_listener_thread.daemon = True  # Allow thread to exit when main program does
 command_listener_thread.start()
 
-def speak_text(text):
-    """Adds text to the speaking queue."""
-    feedback_queue.put(text)
+# Initialize a dictionary to track the last spoken time for each message
+feedback_last_spoken = {}
+
+def speak_text(text, cooldown=5):
+    """Adds text to the speaking queue if it hasn't been spoken recently."""
+    current_time = time.time()
+    if text in feedback_last_spoken:
+        time_since_last_spoken = current_time - feedback_last_spoken[text]
+        if time_since_last_spoken < cooldown:
+            return  # Skip speaking this message if cooldown hasn't passed
+
+    # Update the last spoken time for this message
+    feedback_last_spoken[text] = current_time
+    feedback_queue.put(text)  # Add to queue if cooldown has passed
 
 
 def speak():
@@ -101,7 +112,7 @@ def initialize_ffmpeg():
         '-r', '15',
         '-i', 'pipe:0',
         '-f', 'alsa',  
-        '-i', 'hw:3,0',
+        '-i', 'hw:4,1,0',
         # '-c:v', 'libx264',
         # '-preset', 'veryfast',  # Use ultrafast preset for lower latency
         # '-tune', 'zerolatency',  # Tune for zero latency
