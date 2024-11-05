@@ -9,14 +9,14 @@ import PoseModule as pm
 import os
 from dotenv import load_dotenv
 import threading
-import pyttsx3
+from gtts import gTTS  # Import gTTS for text-to-speech
+import tempfile  # For temporary file handling
 
 load_dotenv()
 
 youtube_stream_key = os.getenv("YOUTUBE_STREAM_KEY")
 ffmpeg_process = None
 should_exit = False
-tts_engine = pyttsx3.init()
 feedback_queue = queue.Queue()
 stop_speaking = False
 cap = cv2.VideoCapture(0)
@@ -55,30 +55,39 @@ def listen_for_commands():
             should_exit = True
             break
 
+# Start the command listener thread
 command_listener_thread = threading.Thread(target=listen_for_commands)
-command_listener_thread.daemon = True
+command_listener_thread.daemon = True  # Allow thread to exit when main program does
 command_listener_thread.start()
 
 def speak_text(text):
+    """Adds text to the speaking queue."""
     feedback_queue.put(text)
 
+
 def speak():
-    global stop_speaking
+    """Thread function to handle speaking messages from the queue."""
     while not stop_speaking:
         if not feedback_queue.empty():
-            text = feedback_queue.get()
-            tts_engine.say(text)
-            tts_engine.runAndWait()
+            text = feedback_queue.get()  # Get the next message
+            # Use gTTS to convert text to speech and play it
+            tts = gTTS(text=text, lang='en')
+            with tempfile.NamedTemporaryFile(delete=True, suffix='.mp3') as tmpfile:
+                tts.save(tmpfile.name)
+                time.sleep(0.1)  # Add a small delay before playing the audio
+                os.system(f"mpg321 {tmpfile.name}")  # Use mpg321 to play the MP3 file
         else:
+            # Add a small sleep to avoid busy waiting
             time.sleep(0.1)
 
+# Start the speaking thread
 speaking_thread = threading.Thread(target=speak)
-speaking_thread.daemon = True
+speaking_thread.daemon = True  # Daemon thread will not prevent exit
 speaking_thread.start()
 
 def initialize_ffmpeg():
     ffmpeg_command = [
-        'C:\\Program Files\\ffmpeg-7.1-essentials_build\\bin\\ffmpeg',
+        'ffmpeg',
         "-rtbufsize", "300M",
         '-y',
         '-f', 'rawvideo',

@@ -10,14 +10,14 @@ import os
 from dotenv import load_dotenv
 import threading
 import sys
-import pyttsx3
+from gtts import gTTS  # Import gTTS for text-to-speech
+import tempfile  # For temporary file handling
 
 load_dotenv()
 
 youtube_stream_key = os.getenv("YOUTUBE_STREAM_KEY")
 ffmpeg_process = None
 should_exit = False  # Initialize an exit flag
-tts_engine = pyttsx3.init() # Initialize the TTS engine
 feedback_queue = queue.Queue()
 stop_speaking = False  # A flag to stop the speaking thread
 cap = cv2.VideoCapture(0)
@@ -68,14 +68,18 @@ def speak_text(text):
     """Adds text to the speaking queue."""
     feedback_queue.put(text)
 
+
 def speak():
     """Thread function to handle speaking messages from the queue."""
-    global stop_speaking  # Ensure we access the global flag
     while not stop_speaking:
         if not feedback_queue.empty():
             text = feedback_queue.get()  # Get the next message
-            tts_engine.say(text)
-            tts_engine.runAndWait()  # This will block until speaking is done
+            # Use gTTS to convert text to speech and play it
+            tts = gTTS(text=text, lang='en')
+            with tempfile.NamedTemporaryFile(delete=True, suffix='.mp3') as tmpfile:
+                tts.save(tmpfile.name)
+                time.sleep(0.1)  # Add a small delay before playing the audio
+                os.system(f"mpg321 {tmpfile.name}")  # Use mpg321 to play the MP3 file
         else:
             # Add a small sleep to avoid busy waiting
             time.sleep(0.1)
@@ -87,7 +91,7 @@ speaking_thread.start()
 
 def initialize_ffmpeg():
     ffmpeg_command = [
-        'C:\\Program Files\\ffmpeg-7.1-essentials_build\\bin\\ffmpeg',
+        'ffmpeg',
         "-rtbufsize", "300M",
         '-y',
         '-f', 'rawvideo',
