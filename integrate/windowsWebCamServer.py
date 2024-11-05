@@ -1,4 +1,5 @@
 import os
+import random
 from flask import Flask, jsonify, request
 import subprocess
 import threading
@@ -7,6 +8,7 @@ import time
 import requests
 import pyttsx3
 from flask_swagger_ui import get_swaggerui_blueprint
+from supabase import create_client
 
 # OAuth 2.0 dependencies
 from google.auth.transport.requests import Request
@@ -19,7 +21,9 @@ from pyngrok import ngrok
 
 app = Flask(__name__)
 ffmpeg_process = None
-pushup_process = None
+heart_rate_data = []
+heart_rate_thread = None
+workout_active = False
 
 # Load environment variables from .env file
 load_dotenv()
@@ -36,6 +40,17 @@ def speak_text(text):
     # Start the speak function in a separate thread
     threading.Thread(target=speak).start()
 
+def generate_heart_rate_data():
+    """Generate random heart rate data every 10 seconds."""
+    global heart_rate_data, workout_active
+
+    while workout_active:
+        # Generate a random heartbeat between 70 and 120 bpm
+        heart_rate = random.randint(70, 120)
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ")  # Current timestamp
+        heart_rate_data.append({"timestamp": timestamp, "heartrate": heart_rate})
+        time.sleep(10)  # Wait for 10 seconds before generating the next reading
+
 # youtube live variables
 youtube_stream_key = os.getenv("YOUTUBE_STREAM_KEY")
 youtube_channel_id = os.getenv("YOUTUBE_CHANNEL_ID")
@@ -50,6 +65,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
 
 SUPABASE_WORKOUT_TABLE = "userWorkouts"
+
+supabase = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
 # # FFmpeg command
 # ffmpeg_command = [
@@ -121,33 +138,52 @@ def get_live_video_url(youtube):
 #     ffmpeg_process = subprocess.Popen(ffmpeg_command)
 
 def insert_user_workout(username, startDT, workout, reps, percentage):
-    # Define the Supabase insert payload
     payload = {
         "username": username,
         "startDT": startDT,
-        "endDT": time.strftime("%Y-%m-%dT%H:%M:%SZ"),  # Get the current datetime
+        "endDT": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "workout": workout,
         "reps": reps,
         "overallAccuracy": percentage
     }
 
-    # Make the HTTP POST request to insert the record into Supabase
-    headers = {
-        "Content-Type": "application/json",
-        "apikey": SUPABASE_API_KEY,
-        "Authorization": f"Bearer {SUPABASE_API_KEY}"
-    }
+    # Insert into Supabase using the client
+    response = supabase.table(SUPABASE_WORKOUT_TABLE).insert(payload).execute()
     
-    url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_WORKOUT_TABLE}"
-    
-    response = requests.post(url, json=payload, headers=headers)
-    
-    if response.status_code == 201:
-        print(f"Record inserted into {SUPABASE_WORKOUT_TABLE}: {payload}")
-        return payload
+    # Check for successful data insertion
+    if response.data:
+        print(f"Record inserted into {SUPABASE_WORKOUT_TABLE}: {response.data}")
+        return response.data[0]
     else:
-        print(f"Failed to insert record: {response.text}")
-        return 0
+        print(f"Failed to insert record: {response}")
+        return {"error": response}
+
+def insert_heart_rate_data(workout_id, heart_rate_data):
+    """Insert heart rate data into the userWorkoutHealth table using Supabase client."""
+    errors = []
+    print(heart_rate_data)
+    
+    for entry in heart_rate_data:
+        payload = {
+            "workout_id": workout_id,
+            "timestamp": entry["timestamp"],
+            "heartrate": entry["heartrate"]
+        }
+
+        # Insert the heart rate data into the userWorkoutHealth table
+        response = supabase.table("userWorkoutHealth").insert(payload).execute()
+        
+        if not response.data:  # Check if data was not inserted successfully
+            error_message = response.error.message if response.error else "Unknown error"
+            errors.append(f"Failed to insert entry {payload}: {error_message}")
+            print(f"Failed to insert heart rate data: {error_message}")
+        else:
+            print(f"Successfully inserted heart rate entry: {payload}")
+
+    # If there were any errors, log them
+    if errors:
+        print("Errors occurred while inserting heart rate data:", errors)
+
 
 def get_ngrok_url():
     try:
@@ -164,65 +200,63 @@ def get_ngrok_url():
 
 @app.route('/start', methods=['POST'])
 def start():
+    global ffmpeg_process, heart_rate_data, heart_rate_thread, workout_active
+
+    # Reset heart rate data and set workout as active
+    heart_rate_data = []
+    workout_active = True
+
     # Get data from the POST request
     data = request.get_json()
-    workout = data.get("workout") # either pushups, squats or bicep curls
+    workout = data.get("workout")  # Either pushups, squats, or bicep curls
 
-    global ffmpeg_process
     if ffmpeg_process is None:
-        # Start the push_up.py script in a new thread/process
-        ffmpeg_process = subprocess.Popen(['python', f'{workout}.py'], 
-                        stdin=subprocess.PIPE,  # Enable stdin for the process
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE)
+        # Start the heart rate generation thread
+        heart_rate_thread = threading.Thread(target=generate_heart_rate_data)
+        heart_rate_thread.start()
+
+        # Start the workout script
+        if workout in ["pushups", "bicepcurls", "squats"]:
+            ffmpeg_process = subprocess.Popen(['python', f'{workout}.py'], 
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:
+            workout_active = False  # Stop generating heart rate if workout is invalid
+            return jsonify({"message": "Not a valid workout"}), 400
 
         # Wait for the stream to initialize on YouTube
         time.sleep(30)  
 
-        # Get the authenticated YouTube service
         youtube = get_authenticated_service()
-        print(youtube)
-
-        # Fetch the live video URLs after the stream has started
         youtube_embed_url, youtube_watch_url = get_live_video_url(youtube)
 
         if youtube_embed_url and youtube_watch_url:
-            # Output a message through the speaker
             speak_text("The video stream has started successfully.")
-
-            return jsonify({
-                "message": "Stream started",
-                "embed_url": youtube_embed_url,
-                "watch_url": youtube_watch_url
-            }), 200
+            return jsonify({"message": "Stream started", "embed_url": youtube_embed_url, "watch_url": youtube_watch_url}), 200
         else:
             return jsonify({"message": "Stream started, but no live video found yet"}), 200
     else:
         return jsonify({"message": "Stream is already running"}), 400
 
+
 @app.route('/stop', methods=['POST'])
 def stop():
-    global ffmpeg_process
+    global ffmpeg_process, workout_active, heart_rate_data
     
-    # Get data from the POST request
     data = request.get_json()
     username = data.get("username")
     startDT = data.get("startDT")
     workout = data.get("workout")
     
     if ffmpeg_process is not None:
-        # Stop the ffmpeg process gracefully
-        ffmpeg_process.stdin.write(b'q\n')  # Send 'q' command to the process
-        ffmpeg_process.stdin.flush()  # Ensure the command is sent
+        workout_active = False  # Stop heart rate generation
+        heart_rate_thread.join()  # Wait for the heart rate thread to finish
 
-        # Wait till results.txt is written
+        ffmpeg_process.stdin.write(b'q\n')
+        ffmpeg_process.stdin.flush()
         time.sleep(5)  
+        ffmpeg_process.wait()
+        ffmpeg_process = None
 
-        # Wait for the process to fully terminate
-        ffmpeg_process.wait()  # This will block until the process terminates
-        ffmpeg_process = None  # Reset the global variable
-
-        # Read the count and success_rate from the result.txt file
         count = 0
         success_rate = 0.0
         try:
@@ -236,11 +270,14 @@ def stop():
         except FileNotFoundError:
             return jsonify({"message": "Result file not found"}), 400
         
-        # Insert the workout data into Supabase
-        result = insert_user_workout(username, startDT, workout, count, success_rate)
-        
-        if result != 0:
-            return jsonify({"message": "Stream stopped and workout logged", "payload": result}), 200
+        # Insert the workout data into Supabase and get the workout_id
+        workout_result = insert_user_workout(username, startDT, workout, count, success_rate)
+        workout_id = workout_result.get("workout_id") if workout_result else None
+
+        # Insert heart rate data into the userWorkoutHealth table
+        if workout_id:
+            insert_heart_rate_data(workout_id, heart_rate_data)
+            return jsonify({"message": "Stream stopped, workout and heart rate logged", "payload": workout_result}), 200
         else:
             return jsonify({"message": "Insertion into database failed"}), 400
     else:
