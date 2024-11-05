@@ -257,8 +257,8 @@ try:
 
             # Draw the push-up count and attempts in the bottom left corner
             cv2.rectangle(img, (0, height - 80), (530, height), (255, 255, 255), cv2.FILLED)
-            cv2.putText(img, f'Count: {count}', (10, height - 50), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
-            cv2.putText(img, f'Attempts: {attempts}', (10, height - 15), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
+            cv2.putText(img, f'Count: {count}', (10, height - 50), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 0), 2)
+            cv2.putText(img, f'Attempts: {attempts}', (10, height - 15), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 0), 2)
 
             # Draw additional metrics (symmetry and average time per push-up)
             cv2.putText(img, f'Avg Time: {avg_time_per_pushup:.2f}s', (230, height - 50), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 0), 2)
@@ -267,13 +267,13 @@ try:
 
             # Draw the feedback text in the top right corner
             cv2.rectangle(img, (width - 400, 0), (width, 40), (255, 255, 255), cv2.FILLED)
-            cv2.putText(img, feedback, (width - 400 + 10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
+            cv2.putText(img, feedback, (width - 400 + 10, 30), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 0), 2)
 
             # Progress bar
             if form == 1:  # Ensure progress bar is drawn only when the form is valid
-                cv2.rectangle(img, (width - 30, 50), (width - 10, 380), (0, 255, 0), 3)  # Outline of the bar
-                cv2.rectangle(img, (width - 30, int(bar)), (width - 10, 380), (0, 255, 0), cv2.FILLED)  # Filled bar
-                cv2.putText(img, f'{int(per)}%', (width - 90, 430), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2) # Percentage
+                cv2.rectangle(img, (width - 60, 50), (width - 40, 380), (237, 149, 100), 3)  # Outline of the bar
+                cv2.rectangle(img, (width - 60, int(bar)), (width - 40, 380), (237, 149, 100), cv2.FILLED)  # Filled bar
+                cv2.putText(img, f'{int(per)}%', (width - 80, 420), cv2.FONT_HERSHEY_PLAIN, 2, (255, 255, 255), 2) # Percentage
 
         # Convert to RGB and resize for FFmpeg
         frame_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
