@@ -221,7 +221,7 @@ try:
                 # Check if the elbow is valid
                 if curl_started and right_elbow < 45:
                     curl_valid = True
-                    feedback = "Good Curl"
+                    feedback = "Good curl"
 
                 # Check if the elbow is extended beyond 135 degrees (attempt is completed)
                 if curl_started and right_elbow > 135:
@@ -234,9 +234,10 @@ try:
                         curl_valid = False          # Reset for the next attempt
                         if count % 5:
                             speak_text(np.random.choice(encouragement_messages))
-
+                    else:
+                        speak_text(np.random.choice(invalid_attempt_messages))
                     # Reset tracking variables for next attempt
-                    curl_started = False
+                    curl_started = False                
 
             if curl_times:
                 avg_time_per_curl = sum(curl_times) / len(curl_times)

@@ -212,6 +212,10 @@ try:
                         if count % 5:
                             speak_text(np.random.choice(encouragement_messages))
                         reached_halfway = False  # Reset for the next squat
+                    else:
+                        # Invalid attempt - squat not counted but was attempted
+                        if is_attempting:  # If an attempt was made but squat didn't count
+                            speak_text(np.random.choice(invalid_attempt_messages))
 
                     # Resetting the attempt logic only when coming back up
                     is_attempting = False  # Reset the attempt flag after completing the squat
