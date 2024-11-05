@@ -12,3 +12,4 @@ pyngrok
 pyttsx3
 requests
 supabase
+gtts
