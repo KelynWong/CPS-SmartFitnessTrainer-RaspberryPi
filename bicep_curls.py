@@ -9,6 +9,7 @@ cap.set(3, 1280)  # Set width
 cap.set(4, 720)   # Set height
 detector = pm.poseDetector()
 count = 0
+success_rate = 0
 attempts = 0
 direction = 0  # 0: extended, 1: flexed
 form = 0
@@ -31,6 +32,9 @@ while cap.isOpened():
     lmList = detector.findPosition(img, False)
 
     if len(lmList) != 0:
+
+        if count > 0:
+            success_rate = (count / attempts) * 100
 
         # Focus on the right arm
         right_elbow = detector.findAngle(img, 12, 14, 16)
@@ -74,6 +78,7 @@ while cap.isOpened():
                 curl_started = False
 
         print(count)
+        print(success_rate)
 
         if curl_times:
             avg_time_per_curl = sum(curl_times) / len(curl_times)
@@ -106,6 +111,7 @@ while cap.isOpened():
         print(f"Final stats")
         print(f"Total attempts: {attempts}")
         print(f"Total curls: {count}")
+        print(f"Success rate: {success_rate:.2f}%")
         print(f"Average time per curl: {avg_time_per_curl:.2f}s")
         print(f"Individual curl times:")
         for i in range(len(curl_times)):
